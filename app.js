@@ -1,14 +1,11 @@
 // Модуль для работы с сообщениями
-class MessageHandler 
-{
-    constructor(app) 
-    {
+class MessageHandler {
+    constructor(app) {
         this.app = app;
         this.messages = new Map();
     }
 
-    addMessage(chatId, message) 
-    {
+    addMessage(chatId, message) {
         if (!this.messages.has(chatId)) {
             this.messages.set(chatId, []);
         }
@@ -20,18 +17,21 @@ class MessageHandler
         this.renderMessages(chatId);
     }
 
-    renderMessages(chatId) 
-    {
+    renderMessages(chatId) {
         const container = document.querySelector('.messages-container');
         const messages = this.messages.get(chatId) || [];
+
+        const formatTime = (date) => {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        };
 
         container.innerHTML = messages.map(msg => `
       <div class="message ${msg.outgoing ? 'outgoing' : 'incoming'}">
         <div class="message-content">
           ${msg.text}
         </div>
-        <small class="text-muted">
-          ${msg.timestamp.toLocaleTimeString()}
+        <small class="message-time">
+          ${formatTime(msg.timestamp)}
         </small>
       </div>
     `).join('');
@@ -41,10 +41,8 @@ class MessageHandler
 }
 
 // Модуль для работы с чатами
-class ChatHandler 
-{
-    constructor(app) 
-    {
+class ChatHandler {
+    constructor(app) {
         this.app = app;
         this.chats = [];
         this.activeChat = null;
@@ -63,7 +61,10 @@ class ChatHandler
         this.setActiveChat(chat.id);
     }
 
-    setActiveChat(chatId) {
+    setActiveChat(chatId, byUser=false) {
+        if (byUser)
+            document.getElementById('sidebar').classList.remove('active');
+
         this.activeChat = chatId;
         const chat = this.chats.find(c => c.id === chatId);
         if (chat) {
@@ -111,6 +112,9 @@ class ChatHandler
         if (chat) {
             const headerContent = `
         <div class="d-flex align-items-center chat-header-content">
+        <div class="menu-button" id="mobile-switch">
+            <i class="fas fa-bars"></i>
+        </div>
           <div class="chat-profile-info" data-chat-id="${chat.id}">
             <div class="avatar me-3">${chat.name[0]}</div>
             <div>
@@ -134,7 +138,7 @@ class ChatHandler
                 <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
               </svg>
             </button>
-            <button class="btn btn-icon chat-options-button">
+            <button class="btn btn-icon chat-options-button" data-action="options">
               <svg width="20" height="20" viewBox="0 0 24 24">
                 <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
               </svg>
@@ -153,12 +157,10 @@ class ChatHandler
 }
 
 // Модуль для работы с файлами
-class FileHandler 
-{
-    constructor(app) 
-    {
+class FileHandler {
+    constructor(app) {
         this.app = app;
-        this.supportedTypes = 
+        this.supportedTypes =
         {
             'image/*': 'Изображения',
             'video/*': 'Видео',
@@ -167,8 +169,7 @@ class FileHandler
         };
     }
 
-    handleFileSelect(files) 
-    {
+    handleFileSelect(files) {
         Array.from(files).forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -188,8 +189,7 @@ class FileHandler
         });
     }
 
-    formatFileSize(bytes) 
-    {
+    formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -199,63 +199,66 @@ class FileHandler
 }
 
 // Модуль для работы с меню
-class MenuHandler 
-{
-    constructor(app) 
-    {
+class MenuHandler {
+    constructor(app) {
         this.app = app;
+        this.notificationState = 'enabled';
         this.initializeMenus();
         this.initializeButtons();
         this.initializeMobileMenu();
         this.initializeCreateChat();
-        this.initializeHeaderButtons();
-        this.popupHandler = new PopupHandler();
+        // this.initializeHeaderButtons();
+
+        this.initializeNotifications();
+        this.initializeInvites();
     }
 
-    initializeMenus() 
-    {
+    initializeMenus() {
         // Chat options menu
-        const optionsButton = document.querySelector('.chat-options-button');
-        const optionsMenu = document.querySelector('.chat-options-menu');
-
-        optionsButton?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            optionsMenu.classList.toggle('show');
-        });
-
+        const optionsMenu = document.querySelector('#chat-options');
         // Attachment menu
         const attachButton = document.querySelector('.attachment-button');
-        const attachMenu = document.querySelector('.attachment-menu');
+        const attachMenu = document.querySelector('#attachment-menu');
 
-        attachButton?.addEventListener('click', (e) => {
+        attachButton?.addEventListener('click', (e) => 
+        {
             e.stopPropagation();
             attachMenu.classList.toggle('show');
         });
 
         // Close menus when clicking outside
-        document.addEventListener('click', () => {
-            optionsMenu?.classList.remove('show');
-            attachMenu?.classList.remove('show');
+        document.addEventListener('click', (e) => 
+        {
+            const btn = e.target.closest('.chat-options-button');
+            console.log(btn, e.target)
+            if (!btn)
+            {
+                optionsMenu.classList.remove('show');
+                attachMenu.classList.remove('show');
+                return;
+            }
+
+            optionsMenu.classList.toggle('show');
         });
 
         // Handle attachment menu items
-        document.querySelectorAll('.attachment-menu .menu-item').forEach(item => {
-            item.addEventListener('click', (e) => {
+        document.querySelectorAll('.attachment-menu .menu-item').forEach(item => 
+        {
+            item.addEventListener('click', (e) => 
+            {
                 e.stopPropagation();
-                if (item.querySelector('.file-input')) {
+                if (item.querySelector('.file-input')) 
                     item.querySelector('.file-input').click();
-                }
             });
         });
     }
 
-    initializeButtons() 
-    {
+    initializeButtons() {
         // Initialize call button
         const callButton = document.querySelector('.btn-outline-primary');
         if (callButton) {
             callButton.addEventListener('click', () => {
-                this.popupHandler.alert('Звонок', 'Функция звонков будет доступна в ближайшее время!');
+                this.app.popupHandler.alert('Звонок', 'Функция звонков будет доступна в ближайшее время!');
             });
         }
 
@@ -269,70 +272,215 @@ class MenuHandler
         });
     }
 
-    initializeMobileMenu() 
-    {
-        const menuButton = document.querySelector('.menu-button');
-        menuButton?.addEventListener('click', () => {
+    initializeMobileMenu() {
+        document.addEventListener('click', (e) => 
+        {
+            const btn = e.target.closest('#mobile-switch');
+            if (!btn) return;
             document.getElementById('sidebar').classList.toggle('active');
         });
     }
 
     initializeCreateChat() 
     {
-        const createButton = document.querySelector('.create-chat-button');
-        createButton?.addEventListener('click', async () => {
-            const name = await this.popupHandler.prompt('Создать чат', 'Введите название чата');
-            if (name) {
-                const newChat = {
-                    id: 'chat_' + Date.now(),
-                    name: name,
-                    lastMessage: { text: 'Чат создан', time: new Date().toLocaleTimeString() },
-                    unreadCount: 0,
-                    online: true
-                };
-                window.app.chatHandler.addChat(newChat);
-            }
-        });
+        const createChatButton = document.querySelector('.create-chat-button');
+        if (createChatButton) {
+            createChatButton.addEventListener('click', async () => {
+                const chatTypeResult = await this.app.popupHandler.show('Создать', `
+                  <div class="create-chat-options">
+                    <div class="menu-item" data-type="dialog">
+                      <i class="fas fa-user"></i>
+                      <span>Диалог</span>
+                    </div>
+                    <div class="menu-item" data-type="group">
+                      <i class="fas fa-users"></i>
+                      <span>Беседа</span>
+                    </div>
+                    <div class="menu-item" data-type="channel">
+                      <i class="fas fa-bullhorn"></i>
+                      <span>Канал</span>
+                    </div>
+                  </div>
+                  <div class="popup-input-container mt-3" style="display: none;">
+                    <input type="text" class="popup-input name-input" placeholder="Введите название">
+                    <input type="text" class="popup-input link-input" placeholder="Введите ссылку (например: t.me/channel)" style="display: none; margin-top: 10px;">
+                    <div class="contact-selection mt-4" style="display: none;">
+                      <h6 class="mb-2">Выберите участников:</h6>
+                      <div class="contact-list">
+                        <div class="contact-item">
+                          <div class="avatar me-3">ИП</div>
+                          <div>
+                            <div>Иван Петров</div>
+                            <small class="text-muted">+7 925 111 22 33</small>
+                          </div>
+                        </div>
+                        <div class="contact-item">
+                          <div class="avatar me-3">МС</div>
+                          <div>
+                            <div>Мария Сидорова</div>
+                            <small class="text-muted">+7 925 222 33 44</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                `, [{ text: 'Отмена', primary: false }, { text: 'Создать', primary: true }]);
+
+                if (chatTypeResult === 0) 
+                {
+                    const selectedType = document.querySelector('.create-chat-options .menu-item.selected')?.dataset.type;
+                    const nameInput = document.querySelector('.name-input');
+                    const linkInput = document.querySelector('.link-input');
+                    const selectedContacts = Array.from(document.querySelectorAll('.contact-item input:checked'));
+
+                    if (selectedType && nameInput?.value) {
+                        const newChat = {
+                            id: `${selectedType}_${Date.now()}`,
+                            name: nameInput.value.trim(),
+                            type: selectedType,
+                            lastMessage: {
+                                text: selectedType === 'channel' ? 'Канал создан' :
+                                    selectedType === 'group' ? 'Беседа создана' :
+                                        'Диаолог создан',
+                                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            },
+                            unreadCount: 0,
+                            online: selectedType === 'dialog',
+                            members: selectedType === 'group' ? selectedContacts.length + 1 : undefined,
+                            channelLink: selectedType === 'channel' ? linkInput?.value : undefined
+                        };
+
+                        this.app.chatHandler.addChat(newChat);
+                    }
+                }
+            });
+
+            // Add click handler for create chat options
+            document.addEventListener('click', (e) => 
+            {
+                const menuItem = e.target.closest('.create-chat-options .menu-item');
+                if (menuItem) {
+                    const inputContainer = document.querySelector('.popup-input-container');
+                    const linkInput = document.querySelector('.link-input');
+                    const contactSelection = document.querySelector('.contact-selection');
+                    const checkboxes = document.querySelectorAll('.contact-item input[type="checkbox"]');
+
+                    document.querySelectorAll('.create-chat-options .menu-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    menuItem.classList.add('selected');
+
+                    // Show input container
+                    if (inputContainer) inputContainer.style.display = 'block';
+
+                    // Handle different chat types
+                    const type = menuItem.dataset.type;
+                    if (type === 'channel') {
+                        if (linkInput) linkInput.style.display = 'block';
+                        if (contactSelection) contactSelection.style.display = 'none';
+                        checkboxes.forEach(cb => cb.disabled = true);
+                    } else if (type === 'group') {
+                        if (linkInput) linkInput.style.display = 'none';
+                        if (contactSelection) contactSelection.style.display = 'block';
+                        checkboxes.forEach(cb => {
+                            cb.disabled = false;
+                            cb.type = 'checkbox';
+                        });
+                    } else if (type === 'dialog') {
+                        if (linkInput) linkInput.style.display = 'none';
+                        if (contactSelection) contactSelection.style.display = 'block';
+                        checkboxes.forEach(cb => {
+                            cb.disabled = false;
+                            cb.type = 'radio';
+                            cb.name = 'contact-selection';
+                        });
+                    }
+                }
+            });
+        }
     }
 
-    initializeHeaderButtons() 
+    initializeNotifications() 
     {
-        document.addEventListener('click', (e) => {
-            const button = e.target.closest('.header-action');
+        document.addEventListener('click', (e) => 
+        {
+            const button = e.target.closest('.header-action[data-action="notifications"]');
             if (!button) return;
 
-            const action = button.dataset.action;
-            switch (action) {
-                case 'call':
-                    this.popupHandler.alert('Звонок', 'Функция звонков будет доступна в ближайшее время');
-                    break;
-                case 'invite':
-                    this.popupHandler.alert('Приглашение', 'Скопируйте ссылку для приглашения пользователей');
-                    break;
-                case 'notifications':
-                    this.popupHandler.alert('Уведомления', 'Уведомления включены');
-                    break;
-            }
+            this.app.popupHandler.show('Уведомления', `
+                <div class="notification-options">
+                    <div class="menu-item ${this.notificationState === 'enabled' ? 'selected' : ''}" data-state="enabled">
+                        <i class="fas fa-bell notifications-enabled"></i>
+                        <span>Включены</span>
+                    </div>
+                    <div class="menu-item ${this.notificationState === 'disabled' ? 'selected' : ''}" data-state="disabled">
+                        <i class="fas fa-bell-slash notifications-disabled"></i>
+                        <span>Выключены</span>
+                    </div>
+                    <div class="menu-item ${this.notificationState === 'muted' ? 'selected' : ''}" data-state="muted">
+                        <i class="fas fa-bell-slash notifications-muted"></i>
+                        <span>Временно выключены</span>
+                    </div>
+                    <div class="menu-item ${this.notificationState === 'mentions' ? 'selected' : ''}" data-state="mentions">
+                        <i class="fas fa-bell notifications-mentions"></i>
+                        <span>Только упоминания</span>
+                    </div>
+                </div>
+            `, [{ text: 'Закрыть', primary: false }]);
+
+            document.querySelectorAll('.notification-options .menu-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.notification-options .menu-item').forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+                    this.notificationState = item.dataset.state;
+                    this.updateNotificationIcon();
+                });
+            });
+        });
+
+        this.updateNotificationIcon();
+    }
+
+    initializeInvites() 
+    {
+        document.addEventListener('click', (e) => 
+        {
+            const button = e.target.closest('.header-action[data-action="invite"]');
+            if (!button) return;
+            this.handleInviteContacts();
         });
     }
 
-    async handleMenuAction(action) 
-    {
+    updateNotificationIcon() {
+        const button = document.querySelector('[data-action="notifications"]');
+        if (!button) return;
+
+        const icons = {
+            'enabled': '<i class="fas fa-bell notifications-enabled"></i>',
+            'disabled': '<i class="fas fa-bell-slash notifications-disabled"></i>',
+            'muted': '<i class="fas fa-bell-slash notifications-muted"></i>',
+            'mentions': '<i class="fas fa-bell notifications-mentions"></i>'
+        };
+
+        button.innerHTML = icons[this.notificationState];
+    }
+
+    async handleMenuAction(action) {
         switch (action) {
             case 'Информация о чате':
-                await this.popupHandler.alert('Информация', 'Информация о чате будет доступна здесь');
+                await this.app.popupHandler.alert('Информация', 'Информация о чате будет доступна здесь');
                 break;
             case 'Очистить историю':
-                if (await this.popupHandler.confirm('Подтверждение', 'Вы уверены, что хотите очистить историю чата?')) {
+                if (await this.app.popupHandler.confirm('Подтверждение', 'Вы уверены, что хотите очистить историю чата?')) {
                     window.app.messageHandler.messages.clear();
                     window.app.messageHandler.renderMessages(window.app.chatHandler.activeChat);
                 }
                 break;
             case 'Заблокировать':
-                await this.popupHandler.alert('Блокировка', 'Пользователь заблокирован');
+                await this.app.popupHandler.alert('Блокировка', 'Пользователь заблокирован');
                 break;
             case 'Удалить чат':
-                if (await this.popupHandler.confirm('Подтверждение', 'Вы уверены, что хотите удалить этот чат?')) {
+                if (await this.app.popupHandler.confirm('Подтверждение', 'Вы уверены, что хотите удалить этот чат?')) {
                     const activeChat = window.app.chatHandler.activeChat;
                     window.app.chatHandler.chats = window.app.chatHandler.chats.filter(chat => chat.id !== activeChat);
                     window.app.chatHandler.renderChats();
@@ -340,10 +488,10 @@ class MenuHandler
                 break;
             // ...rest of the cases
             case 'Документ':
-                this.popupHandler.triggerFileInput('application/*');
+                this.app.popupHandler.triggerFileInput('application/*');
                 break;
             case 'Контакт':
-                await this.popupHandler.alert('Контакт', 'Обмен контактами будет доступен в ближайшее время');
+                await this.app.popupHandler.alert('Контакт', 'Обмен контактами будет доступен в ближайшее время');
                 break;
             case 'Геолокация':
                 if (navigator.geolocation) {
@@ -356,52 +504,94 @@ class MenuHandler
                             window.app.messageHandler.addMessage(window.app.chatHandler.activeChat, message);
                         },
                         () => {
-                            this.popupHandler.alert('Ошибка', 'Невозможно определить местоположение');
+                            this.app.popupHandler.alert('Ошибка', 'Невозможно определить местоположение');
                         }
                     );
                 }
                 break;
         }
     }
+
+    async handleInviteContacts() 
+    {
+        const contacts = 
+        [
+            { id: '1', name: 'Иван Петров', phone: '+7 925 111 22 33' },
+            { id: '2', name: 'Мария Сидорова', phone: '+7 925 222 33 44' },
+            // Add more contacts as needed
+        ];
+
+        const content = `
+            <div class="contact-list">
+                ${contacts.map(contact => `
+                    <div class="contact-item" data-contact-id="${contact.id}">
+                        <div class="avatar me-3">${contact.name[0]}</div>
+                        <div>
+                            <div>${contact.name}</div>
+                            <small class="text-muted">${contact.phone}</small>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        document.addEventListener('click', (e) =>
+        {
+            const button = e.target.closest('.contact-item');
+            if (!button) return;
+            button.className.includes('selected') ? button.classList.remove('selected') : button.classList.add('selected');
+        });
+
+        const result = await this.app.popupHandler.show('Пригласить пользователей', content, 
+        [
+            { text: 'Отмена', primary: false },
+            { text: 'Пригласить', primary: true }
+        ]);
+
+        if (result === 1) 
+        {
+            const selectedContacts = Array.from(document.querySelectorAll('.contact-item input:checked'))
+                .map(checkbox => checkbox.closest('.contact-item').dataset.contactId);
+            // Handle selected contacts...
+        }
+    }
 }
 
-class PopupHandler 
-{
-    constructor(app) 
-    {
+// Модуль для работы с попапами
+class PopupHandler {
+    constructor(app) {
         this.app = app;
         this.overlay = this.createOverlay();
         document.body.appendChild(this.overlay);
     }
 
-    createOverlay() 
-    {
+    createOverlay() {
         const overlay = document.createElement('div');
         overlay.className = 'popup-overlay';
         overlay.innerHTML = `<div class="popup-content"></div>`;
         return overlay;
     }
 
-    createPopup(title, content, buttons) {
+    createPopup(title, content, buttons = [{ text: 'OK', primary: true }]) {
         const popup = this.overlay.querySelector('.popup-content');
 
         popup.innerHTML = `
-      <div class="popup-header">
-        <div class="popup-title">${title}</div>
-        <div class="popup-close">✕</div>
-      </div>
-      <div class="popup-body">${content}</div>
-      <div class="popup-footer">
-        ${buttons.map(btn => `
-          <button class="popup-btn ${btn.primary ? 'popup-btn-primary' : 'popup-btn-secondary'}">${btn.text}</button>
-        `).join('')}
-      </div>
-    `;
+            <div class="popup-header">
+                <div class="popup-title">${title}</div>
+                <div class="popup-close">✕</div>
+            </div>
+            <div class="popup-body">${content}</div>
+            <div class="popup-footer">
+                ${buttons.map(btn => `
+                    <button class="popup-btn ${btn.primary ? 'popup-btn-primary' : 'popup-btn-secondary'}">${btn.text}</button>
+                `).join('')}
+            </div>
+        `;
 
         return popup;
     }
 
-    show(title, content, buttons) {
+    show(title, content, buttons = [{ text: 'OK', primary: true }]) {
         return new Promise((resolve) => {
             const popup = this.createPopup(title, content, buttons);
 
@@ -429,10 +619,10 @@ class PopupHandler
 
     async prompt(title, placeholder = '') {
         const content = `
-      <div class="popup-input-container">
-        <input type="text" class="popup-input" placeholder="${placeholder}" autofocus>
-      </div>
-    `;
+            <div class="popup-input-container">
+                <input type="text" class="popup-input" placeholder="${placeholder}" autofocus>
+            </div>
+        `;
         const buttons = [
             { text: 'Отмена', primary: false },
             { text: 'OK', primary: true }
@@ -469,10 +659,9 @@ class PopupHandler
     }
 }
 
-class ProfileHandler 
-{
-    constructor(app) 
-    {
+// Модуль для работы с профилями
+class ProfileHandler {
+    constructor(app) {
         this.app = app;
         this.currentProfile = {
             id: 'self',
@@ -501,42 +690,52 @@ class ProfileHandler
             }],
             // ... other profiles
         ]);
+
+        document.querySelector('.chats-list').addEventListener('click', (e) => {
+            const avatar = e.target.closest('.avatar');
+            if (avatar) {
+                e.stopPropagation();
+                const chatItem = avatar.closest('.chat-item');
+                if (chatItem) {
+                    this.showProfile(chatItem.dataset.chatId);
+                }
+            }
+        });
     }
 
-    async showProfile(profileId) 
-    {
+    async showProfile(profileId) {
         const profile = this.profiles.get(profileId) || this.currentProfile;
         const isGroup = 'members' in profile;
 
         const content = `
-      <div class="profile-card">
-        <div class="profile-avatar large">${profile.avatar}</div>
-        <h3 class="profile-name">${profile.name}</h3>
-        ${isGroup ? `
-          <div class="profile-info">
-            <div class="profile-label">Участники</div>
-            <div class="profile-value">${profile.members} участников</div>
-          </div>
-          <div class="profile-info">
-            <div class="profile-label">Описание</div>
-            <div class="profile-value">${profile.description}</div>
-          </div>
-        ` : `
-          <div class="profile-info">
-            <div class="profile-label">Телефон</div>
-            <div class="profile-value">${profile.phone}</div>
-          </div>
-          <div class="profile-info">
-            <div class="profile-label">Username</div>
-            <div class="profile-value">${profile.username}</div>
-          </div>
-          <div class="profile-info">
-            <div class="profile-label">Bio</div>
-            <div class="profile-value">${profile.bio}</div>
-          </div>
-        `}
-      </div>
-    `;
+            <div class="profile-card">
+                <div class="profile-avatar large">${profile.avatar}</div>
+                <h3 class="profile-name">${profile.name}</h3>
+                ${isGroup ? `
+                    <div class="profile-info">
+                        <div class="profile-label">Участники</div>
+                        <div class="profile-value">${profile.members} участников</div>
+                    </div>
+                    <div class="profile-info">
+                        <div class="profile-label">Описание</div>
+                        <div class="profile-value">${profile.description}</div>
+                    </div>
+                ` : `
+                    <div class="profile-info">
+                        <div class="profile-label">Телефон</div>
+                        <div class="profile-value">${profile.phone}</div>
+                    </div>
+                    <div class="profile-info">
+                        <div class="profile-label">Username</div>
+                        <div class="profile-value">${profile.username}</div>
+                    </div>
+                    <div class="profile-info">
+                        <div class="profile-label">Bio</div>
+                        <div class="profile-value">${profile.bio}</div>
+                    </div>
+                `}
+            </div>
+        `;
 
         await window.app.popupHandler.show('Профиль', content, [
             { text: 'Закрыть', primary: false }
@@ -544,64 +743,68 @@ class ProfileHandler
     }
 }
 
-class SidebarHandler 
-{
-    constructor(app) 
-    {
+// Модуль для работы с сайдбаром
+class SidebarHandler {
+    constructor(app) {
         this.app = app;
-        this.initializeSidebar();
+        this.inflateSidebar();
         this.initializeMenuButton();
     }
 
-    initializeSidebar() 
-    {
+    inflateSidebar() {
         const sidebar = document.createElement('div');
         sidebar.className = 'settings-sidebar';
-        console.log(this.app.profileHandler);
-        const profile = this.app.profileHandler.currentProfile;
 
         sidebar.innerHTML = `
-      <div class="settings-header">
-        <div class="settings-title">Меню</div>
-        <div class="settings-close">✕</div>
-      </div>
-      <div class="settings-content">
-        <div class="current-account">
-          <div class="avatar">${profile.avatar}</div>
-          <div class="account-info">
-            <div class="account-name">${profile.name}</div>
-            <div class="account-phone">${profile.phone}</div>
-          </div>
-        </div>
-        <div class="settings-list">
-          <div class="settings-item" data-action="new-group">
-            <div class="icon">👥</div>
-            <div>Создать группу</div>
-          </div>
-          <div class="settings-item" data-action="contacts">
-            <div class="icon">📱</div>
-            <div>Контакты</div>
-          </div>
-          <div class="settings-item" data-action="settings">
-            <div class="icon">⚙️</div>
-            <div>Настройки</div>
-          </div>
-          <div class="settings-item" data-action="help">
-            <div class="icon">❓</div>
-            <div>Помощь</div>
-          </div>
-        </div>
-      </div>
-    `;
+            <div class="settings-header p-3">
+                <div class="settings-title h5 mb-0">Меню</div>
+                <div class="settings-close"><i class="fas fa-times"></i></div>
+            </div>
+            <div class="settings-content">
+                <div class="current-account p-3 border-bottom">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar me-3">ТГ</div>
+                        <div class="account-info">
+                            <div class="account-name">Telegram Web</div>
+                            <div class="account-phone text-muted">+7 999 123 45 67</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-list">
+                    <div class="settings-item p-3" data-action="new-group">
+                        <div class="d-flex align-items-center">
+                            <div class="icon me-3"><i class="fas fa-users"></i></div>
+                            <div>Создать группу</div>
+                        </div>
+                    </div>
+                    <div class="settings-item p-3" data-action="contacts">
+                        <div class="d-flex align-items-center">
+                            <div class="icon me-3"><i class="fas fa-address-book"></i></div>
+                            <div>Контакты</div>
+                        </div>
+                    </div>
+                    <div class="settings-item p-3" data-action="settings">
+                        <div class="d-flex align-items-center">
+                            <div class="icon me-3"><i class="fas fa-cog"></i></div>
+                            <div>Настройки</div>
+                        </div>
+                    </div>
+                    <div class="settings-item p-3" data-action="help">
+                        <div class="d-flex align-items-center">
+                            <div class="icon me-3"><i class="fas fa-question-circle"></i></div>
+                            <div>Помощь</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
         document.body.appendChild(sidebar);
 
-        // Handle close button click
         sidebar.querySelector('.settings-close').addEventListener('click', () => {
             sidebar.classList.remove('active');
         });
 
-        // Handle menu items
         sidebar.querySelectorAll('.settings-item').forEach(item => {
             item.addEventListener('click', () => {
                 const action = item.dataset.action;
@@ -610,7 +813,6 @@ class SidebarHandler
             });
         });
 
-        // Close sidebar when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.settings-sidebar') &&
                 !e.target.closest('.menu-button')) {
@@ -640,7 +842,10 @@ class SidebarHandler
                     const newGroup = {
                         id: 'group_' + Date.now(),
                         name: groupName,
-                        lastMessage: { text: 'Группа создана', time: new Date().toLocaleTimeString() },
+                        lastMessage: {
+                            text: 'Группа создана',
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        },
                         unreadCount: 0,
                         online: true,
                         members: 1,
@@ -663,33 +868,28 @@ class SidebarHandler
 }
 
 // Инициализация приложения
-class App 
-{
-    constructor()     
-    {
+class App {
+    constructor() {
         this.messageHandler = new MessageHandler(this);
         this.chatHandler = new ChatHandler(this);
         this.fileHandler = new FileHandler(this);
-        this.menuHandler = new MenuHandler(this);
         this.popupHandler = new PopupHandler(this);
         this.profileHandler = new ProfileHandler(this);
+        this.menuHandler = new MenuHandler(this);
         this.sidebarHandler = new SidebarHandler(this);
 
-        this.initializeEventListeners();
+        this.initEventListeners();
     }
 
-    initializeEventListeners() 
-    {
+    initEventListeners() {
         // Chat selection handler
         const chatsList = document.querySelector('.chats-list');
-        if (chatsList) 
-        {
+        if (chatsList) {
             chatsList.addEventListener('click', (e) => {
                 const chatItem = e.target.closest('.chat-item');
-                if (chatItem) 
-                {
+                if (chatItem) {
                     const chatId = chatItem.dataset.chatId;
-                    this.chatHandler.setActiveChat(chatId);
+                    this.chatHandler.setActiveChat(chatId, true);
                     this.messageHandler.renderMessages(chatId);
                 }
             });
@@ -735,7 +935,7 @@ document.addEventListener('DOMContentLoaded', () =>
                 if (chat) {
                     chat.lastMessage = {
                         text,
-                        time: new Date().toLocaleTimeString()
+                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     };
                     window.app.chatHandler.renderChats();
                 }
