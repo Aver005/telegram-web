@@ -17,7 +17,56 @@ class MessageHandler {
         this.renderMessages(chatId);
     }
 
-    renderMessages(chatId) {
+    addReaction(messageId, reaction) {
+        for (const [chatId, messages] of this.messages) {
+          const message = messages.find(m => m.id === messageId);
+          if (message) {
+            if (!message.reactions) message.reactions = {};
+            
+            // Удаляем предыдущую реакцию пользователя если она есть
+            const userReaction = Object.keys(message.reactions)
+              .find(r => message.reactions[r].users.includes('currentUser'));
+            
+            if (userReaction) {
+              if (userReaction === reaction) {
+                // Если та же реакция - удаляем
+                delete message.reactions[reaction];
+                if (Object.keys(message.reactions).length === 0) {
+                  delete message.reactions;
+                }
+              } else {
+                // Удаляем из предыдущей реакции
+                message.reactions[userReaction].count--;
+                message.reactions[userReaction].users = 
+                  message.reactions[userReaction].users.filter(u => u !== 'currentUser');
+                
+                // Добавляем новую
+                message.reactions[reaction] = {
+                  count: 1,
+                  users: ['currentUser']
+                };
+              }
+            } else {
+              // Новая реакция
+              if (message.reactions[reaction]) {
+                message.reactions[reaction].count++;
+                message.reactions[reaction].users.push('currentUser');
+              } else {
+                message.reactions[reaction] = {
+                  count: 1,
+                  users: ['currentUser']
+                };
+              }
+            }
+            
+            this.renderMessages(chatId);
+            return;
+          }
+        }
+      }
+
+    renderMessages(chatId) 
+    {
         const container = document.querySelector('.messages-container');
         const messages = this.messages.get(chatId) || [];
 
@@ -26,15 +75,23 @@ class MessageHandler {
         };
 
         container.innerHTML = messages.map(msg => `
-      <div class="message ${msg.outgoing ? 'outgoing' : 'incoming'}">
-        <div class="message-content">
-          ${msg.text}
-        </div>
-        <small class="message-time">
-          ${formatTime(msg.timestamp)}
-        </small>
-      </div>
-    `).join('');
+            <div class="message ${msg.outgoing ? 'outgoing' : 'incoming'}" data-message-id="${msg.id}">
+              <div class="message-content">
+                ${msg.text}
+                ${msg.reactions ? `
+                  <div class="message-reactions">
+                    ${Object.entries(msg.reactions).map(([r, data]) => `
+                      <div class="reaction ${data.users.includes('currentUser') ? 'selected' : ''}" 
+                           data-reaction="${r}">
+                        ${r} <span class="reaction-count">${data.count}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </div>
+              <small class="message-time">${formatTime(msg.timestamp)}</small>
+            </div>
+          `).join('');
 
         container.scrollTop = container.scrollHeight;
     }
@@ -881,7 +938,8 @@ class App {
         this.initEventListeners();
     }
 
-    initEventListeners() {
+    initEventListeners() 
+    {
         // Chat selection handler
         const chatsList = document.querySelector('.chats-list');
         if (chatsList) {
@@ -910,6 +968,109 @@ class App {
                 this.fileHandler.handleFileSelect(e.target.files);
             });
         }
+
+        document.addEventListener('mouseover', e => 
+        {
+            const message = e.target.closest('.message');
+            if (message) 
+            {
+                message.classList.add('hovered');
+            }
+        });
+
+        document.addEventListener('mouseout', e => 
+        {
+            const message = e.target.closest('.message');
+            if (message) 
+            {
+                message.classList.remove('hovered');
+            }
+        });
+
+        document.addEventListener('click', e => 
+        {
+            const reaction = e.target.closest('.reaction');
+            const message = e.target.closest('.message');
+            const reactionOption = e.target.closest('.reaction-option');
+        
+            if (reaction && message) 
+            {
+                const messageId = message.dataset.messageId;
+                const reactionType = reaction.dataset.reaction;
+                this.messageHandler.addReaction(messageId, reactionType);
+            }
+        
+            if (message) 
+            {
+                const rect = message.getBoundingClientRect();
+                const menu = document.getElementById('reactions-menu');
+                menu.style.left = `${rect.left}px`;
+                menu.style.top = `${rect.top - 50}px`;
+                menu.classList.add('visible');
+            }
+        
+            if (reactionOption) 
+            {
+                const message = document.querySelector('.message.hovered');
+                if (message) 
+                {
+                    const messageId = message.dataset.messageId;
+                    const reaction = reactionOption.dataset.reaction;
+                    this.messageHandler.addReaction(messageId, reaction);
+                    menu.classList.remove('visible');
+                }
+            }
+        });
+        
+        document.addEventListener('click', e => 
+        {
+            if (!e.target.closest('.reactions-menu') && !e.target.closest('.message')) 
+            {
+                document.getElementById('reactions-menu').classList.remove('visible');
+            }
+        });
+
+        document.addEventListener('contextmenu', e => 
+        {
+            const message = e.target.closest('.message');
+            if (message)
+            {
+                e.preventDefault();
+                const rect = message.getBoundingClientRect();
+                const menu = document.getElementById('reactions-menu');
+                menu.style.left = `${rect.left}px`;
+                menu.style.top = `${rect.top - 50}px`;
+                menu.classList.add('visible');
+                message.classList.add('selected-for-reaction');
+            }
+        });
+
+        // Обработчик выбора реакции
+        document.getElementById('reactions-menu').addEventListener('click', e => 
+        {
+            const reactionOption = e.target.closest('.reaction-option');
+            const message = document.querySelector('.message.selected-for-reaction');
+            
+            if (reactionOption && message) 
+            {
+                const messageId = message.dataset.messageId;
+                const reaction = reactionOption.dataset.reaction;
+                this.messageHandler.addReaction(messageId, reaction);
+            }
+            
+            document.getElementById('reactions-menu').classList.remove('visible');
+            message?.classList.remove('selected-for-reaction');
+        });
+
+        // Закрытие меню при клике вне его
+        document.addEventListener('click', e => 
+        {
+            if (!e.target.closest('.reactions-menu')) 
+            {
+                document.getElementById('reactions-menu').classList.remove('visible');
+                document.querySelector('.message.selected-for-reaction')?.classList.remove('selected-for-reaction');
+            }
+        });
     }
 }
 
@@ -917,14 +1078,18 @@ document.addEventListener('DOMContentLoaded', () =>
 {
     window.app = new App();
     // Add event handler for message input and send button immediately after app initialization
-    const messageInput = document.querySelector('.message-input input');
-    const sendButton = document.querySelector('.message-input .btn-primary');
+    const messageInput = document.querySelector('.message-input textarea');
+    const sendButton = document.querySelector('.message-input .send-button');
 
-    if (messageInput && sendButton) {
-        const sendMessage = () => {
+    if (messageInput && sendButton) 
+    {
+        const sendMessage = () => 
+        {
             const text = messageInput.value.trim();
-            if (text && window.app.chatHandler.activeChat) {
-                window.app.messageHandler.addMessage(window.app.chatHandler.activeChat, {
+            if (text && window.app.chatHandler.activeChat) 
+            {
+                window.app.messageHandler.addMessage(window.app.chatHandler.activeChat, 
+                {
                     text,
                     outgoing: true
                 });
@@ -932,8 +1097,10 @@ document.addEventListener('DOMContentLoaded', () =>
 
                 // Update last message in chat
                 const chat = window.app.chatHandler.chats.find(c => c.id === window.app.chatHandler.activeChat);
-                if (chat) {
-                    chat.lastMessage = {
+                if (chat) 
+                {
+                    chat.lastMessage = 
+                    {
                         text,
                         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     };
